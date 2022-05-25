@@ -1,9 +1,10 @@
 import io.restassured.RestAssured;
 import io.restassured.response.Response;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import static org.hamcrest.Matchers.*;
-
+import io.qameta.allure.junit4.DisplayName;
 import static io.restassured.RestAssured.given;
 
 public class CourierLoginTest {
@@ -11,23 +12,25 @@ public class CourierLoginTest {
     public void setUp() {
         RestAssured.baseURI = "https://qa-scooter.praktikum-services.ru";
     }
-
-    @Test
-    public void createCourier() {
-        String login = "potter8";
+    @Before
+    public void createNewCourier() {
+        String login = "potter7";
         String password = "password1";
         String firstName = "harry";
 
         //создаем курьера
         CourierCreation courier = new CourierCreation(login, password, firstName);
-        Response response = given()
-                .header("Content-type", "application/json")
-                .and()
-                .body(courier)
-                .when()
-                .post("/api/v1/courier");
-        response.then()
-                .statusCode(201);
+        CourierClient courierClient = new CourierClient();
+        Response createCourierResponse = courierClient.createCourier(courier);
+        createCourierResponse.then().assertThat().statusCode(201);
+    }
+
+    @Test
+    @DisplayName("Check a valid login")
+    public void validLogin() {
+        String login = "potter7";
+        String password = "password1";
+        String firstName = "harry";
 
         //логиним курьера и проверяем id
         CourierLogin courierLogin = new CourierLogin(login, password);
@@ -38,39 +41,16 @@ public class CourierLoginTest {
                         .body(courierLogin)
                         .when()
                         .post("/api/v1/courier/login");
-        loginResponse.then().assertThat().body("id", notNullValue())
-                .statusCode(200);
-
-        //получаем id
-        CourierID id = given()
-                .header("Content-type", "application/json")
-                .body(courierLogin)
-                .post("/api/v1/courier/login")
-                .thenReturn()
-                .body()
-                .as(CourierID.class);
-
-        //удаляем курьера
-        Response deleteResponse = given().delete("/api/v1/courier/" + id.getId());
-        deleteResponse.then().assertThat().statusCode(200);
+        loginResponse.then().statusCode(200)
+                .assertThat().body("id", notNullValue());
     }
 
     @Test
+    @DisplayName("Check a login when one of the fields is missing")
     public void checkInvalidField() {
         String login = "potter7";
         String password = "password1";
         String firstName = "harry";
-
-        //создаем курьера
-        CourierCreation courier = new CourierCreation(login, password, firstName);
-        Response response = given()
-                .header("Content-type", "application/json")
-                .and()
-                .body(courier)
-                .when()
-                .post("/api/v1/courier");
-        response.then()
-                .statusCode(201);
 
         CourierLogin courierInvalidLogin = new CourierLogin(login, null);
         Response invalidFieldResponse =
@@ -82,49 +62,14 @@ public class CourierLoginTest {
                         .post("/api/v1/courier/login");
         invalidFieldResponse.then().assertThat()
                 .statusCode(504);
-
-        //логиним курьера и проверяем id
-        CourierLogin courierLogin = new CourierLogin(login, password);
-        Response loginResponse =
-                given()
-                        .header("Content-type", "application/json")
-                        .and()
-                        .body(courierLogin)
-                        .when()
-                        .post("/api/v1/courier/login");
-        loginResponse.then().assertThat().body("id", notNullValue())
-                .statusCode(200);
-
-        //получаем id
-        CourierID id = given()
-                .header("Content-type", "application/json")
-                .body(courierLogin)
-                .post("/api/v1/courier/login")
-                .thenReturn()
-                .body()
-                .as(CourierID.class);
-
-        //удаляем курьера
-        Response deleteResponse = given().delete("/api/v1/courier/" + id.getId());
-        deleteResponse.then().assertThat().statusCode(200);
     }
 
     @Test
+    @DisplayName("Check an invalid password")
     public void checkLoginInvalidPassword() {
         String login = "potter7";
         String password = "password1";
         String firstName = "harry";
-
-        //создаем курьера
-        CourierCreation courier = new CourierCreation(login, password, firstName);
-        Response response = given()
-                .header("Content-type", "application/json")
-                .and()
-                .body(courier)
-                .when()
-                .post("/api/v1/courier");
-        response.then()
-                .statusCode(201);
 
         //пробуем залогиниться с неправильным паролем
         CourierLogin courierInvalidLogin = new CourierLogin(login, "123");
@@ -137,34 +82,10 @@ public class CourierLoginTest {
                         .post("/api/v1/courier/login");
         invalidFieldResponse.then().assertThat()
                 .statusCode(404);
-
-        //логиним курьера и проверяем id
-        CourierLogin courierLogin = new CourierLogin(login, password);
-        Response loginResponse =
-                given()
-                        .header("Content-type", "application/json")
-                        .and()
-                        .body(courierLogin)
-                        .when()
-                        .post("/api/v1/courier/login");
-        loginResponse.then().assertThat().body("id", notNullValue())
-                .statusCode(200);
-
-        //получаем id
-        CourierID id = given()
-                .header("Content-type", "application/json")
-                .body(courierLogin)
-                .post("/api/v1/courier/login")
-                .thenReturn()
-                .body()
-                .as(CourierID.class);
-
-        //удаляем курьера
-        Response deleteResponse = given().delete("/api/v1/courier/" + id.getId());
-        deleteResponse.then().assertThat().statusCode(200);
     }
 
     @Test
+    @DisplayName("Check non existent user cannot log in")
     public void checkLoginNegativeNotExistentUser() {
         String login = "voldemort";
         String password = "password1";
@@ -177,7 +98,25 @@ public class CourierLoginTest {
                         .body(courierLogin)
                         .when()
                         .post("/api/v1/courier/login");
-        response.then().assertThat()//.body("ok", equalTo("true"))
-                .statusCode(404);
+        response.then().statusCode(404);
+    }
+
+    @After
+    public void deleteCourier(){
+        String login = "potter7";
+        String password = "password1";
+
+        CourierLogin courierLogin = new CourierLogin(login,password);
+
+        CourierID id = given()
+                .header("Content-type", "application/json")
+                .body(courierLogin)
+                .post("/api/v1/courier/login")
+                .thenReturn()
+                .body()
+                .as(CourierID.class);
+
+        //Удаляем созданного курьера
+        Response deleteResponse = given().delete("/api/v1/courier/" + id.getId());
     }
 }
